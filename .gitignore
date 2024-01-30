@@ -1,0 +1,26 @@
+# Ignore node_modules and pnpm-store directories
+node_modules/
+.pnpm-store/
+
+# Ignore package-lock.json and shrinkwrap.yaml
+package-lock.json
+shrinkwrap.yaml
+
+# Ignore .env files (if applicable)
+.env
+
+# Ignore logs and log files
+logs/
+*.log
+
+# Ignore coverage reports (if generated)
+coverage/
+
+# Ignore any compiled TypeScript files (if applicable)
+*.tsbuildinfo
+
+# Ignore pnpm-debug.log (if generated)
+pnpm-debug.log
+
+# Ignore macOS specific files
+.DS_Store
