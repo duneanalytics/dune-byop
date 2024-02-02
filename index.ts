@@ -1,70 +1,58 @@
-import { createPublicClient, http, parseAbi, parseAbiItem } from 'viem'
-import { mainnet } from 'viem/chains'
+import { createPublicClient, http } from 'viem';
+import { base } from 'viem/chains';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
+const alchemy_api_key = process.env.ALCHEMY_API_KEY as string; // Assuming the API key is stored in an environment variable
 export const publicClient = createPublicClient({
-    chain: mainnet,
-    transport: http('https://eth-mainnet.g.alchemy.com/v2/RyMo60-cLKdpoQxbAiCUt3m9pQjPVnX4')
-})
+    chain: base,
+    transport: http(`https://base-mainnet.g.alchemy.com/v2/${alchemy_api_key}`)
+});
 
 async function main() {
-    /**
-     * 1. Get the contract deployment block number (not in this script)
-     * 2. Call getLogs to grab logs info and the transactionHash, blockNumber
-     * 3. call getTransaction to grab tx_from and tx_to 
-     * 4. call getBlock to grab timestamp, then convert to block_time and block_date 
-     */
+    const currentBlockNumber = await publicClient.getBlockNumber();
 
-    const currentBlockNumber = 19073790n //await publicClient.getBlockNumber()
+    let fromBlock: bigint = 3620407n;
+    let toBlock: bigint = currentBlockNumber;
 
-    let fromBlock = 19072790n;
-    let toBlock = fromBlock + 799n; // max range is 800
+    const logs: any[] = [];
 
-    const logs = [];
+    while (fromBlock <= currentBlockNumber) {
+        try {
+            const result = await publicClient.getLogs({
+                address: '0xd0b53D9277642d899DF5C87A3966A349A798F224',
+                fromBlock,
+                toBlock
+            });
 
-    // while (toBlock <= currentBlockNumber) {
-    console.log(`Fetching logs from block ${fromBlock} to ${toBlock}`);
-    const result = await publicClient.getLogs({
-        address: '0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc',
-        events: parseAbi([
-            'event Swap(address indexed sender, uint256 amount0In, uint256 amount1In, uint256 amount0Out, uint256 amount1Out, address indexed to)',
-            'event Sync(uint112 reserve0, uint112 reserve1)',
-            'event Approval(address indexed owner, address indexed spender, uint256 value)',
-            'event Burn(address indexed sender, uint256 amount0, uint256 amount1, address indexed to)',
-            'event Mint(address indexed sender, uint256 amount0, uint256 amount1)',
-            'event Transfer(address indexed from, address indexed to, uint256 value)'
-
-        ]),
-        fromBlock,
-        toBlock
-    });
-    logs.push(...result);
-    // fromBlock = toBlock + 1n;
-    // toBlock = fromBlock + 799n; //TODO someone check my math here plz
-    // }
-
-    // console.log(logs)
-
-    const transactionHashList = logs.map(log => log.transactionHash);
-    const blockNumberList = logs.map(log => log.blockNumber);
-
-    const transactions: { transaction_hash: string, transaction_from: string, transaction_to: string }[] = [];
-    for (let i = 0; i < transactionHashList.length; i++) {
-        const transaction = await publicClient.getTransaction({
-            hash: transactionHashList[i],
-        });
-
-        transactions.push({
-            transaction_hash: transaction.hash,
-            transaction_from: transaction.from ?? '',
-            transaction_to: transaction.to ?? ''
-        });
+            logs.push(...result);
+            fromBlock = toBlock + 1n;
+            toBlock = currentBlockNumber;
+        } catch (error: any) {
+            if (error.details) {
+                const match = error.details.match(/\[0x([a-f0-9]+), 0x([a-f0-9]+)\]/);
+                if (match) {
+                    fromBlock = BigInt(`0x${match[1]}`);
+                    toBlock = BigInt(`0x${match[2]}`);
+                    console.log(`Fetching logs from block ${fromBlock} to ${toBlock}`);
+                } else {
+                    console.error("Error parsing block range from error message:", error);
+                    break;
+                }
+            } else {
+                console.error("Unexpected error:", error);
+                break;
+            }
+        }
     }
 
-    const blocks: { block_number: BigInt, block_time: string, block_date: string }[] = [];
+    const blockNumberList = logs.map(log => log.blockNumber);
+    console.log(`Number of blocks to get info on: ${logs.length}`);
+
+    const blocks: { block_number: bigint, block_time: string, block_date: string }[] = [];
     for (let i = 0; i < blockNumberList.length; i++) {
+        console.log(`Fetching block ${blockNumberList[i]}`);
         const block = await publicClient.getBlock({
             blockNumber: blockNumberList[i],
         });
@@ -80,61 +68,51 @@ async function main() {
         });
     }
 
-    const fullTable = logs.map(log => {
-        const matchingTransaction = transactions.find(transaction => transaction.transaction_hash === log.transactionHash);
-        const matchingBlock = blocks.find(block => block.block_number === log.blockNumber);
+    const transactionHashList = logs.map(log => log.transactionHash);
+    console.log(`Number of transactions to get info on: ${logs.length}`);
 
-        return `${log.blockHash},${log.blockNumber.toString()},${matchingBlock?.block_time},${matchingBlock?.block_date},${log.address},${log.eventName},${log.transactionHash},${matchingTransaction ? matchingTransaction.transaction_from : ''},${matchingTransaction ? matchingTransaction.transaction_to : ''},${log.transactionIndex.toString()},${log.logIndex.toString()},${log.topics[0] || ''},${log.topics.length > 1 ? log.topics[1] : ''},${log.topics.length > 2 ? log.topics[2] : ''},${log.topics.length > 3 ? log.topics[3] : ''},${log.data},${log.removed.toString()}`;
+    const transactions: { transaction_hash: string, transaction_from: string, transaction_to: string }[] = [];
+    for (let i = 0; i < transactionHashList.length; i++) {
+        console.log(`Fetching transaction ${transactionHashList[i]}`);
+        const transaction = await publicClient.getTransaction({
+            hash: transactionHashList[i],
+        });
+
+        transactions.push({
+            transaction_hash: transaction.hash,
+            transaction_from: transaction.from ?? '',
+            transaction_to: transaction.to ?? ''
+        });
+    }
+
+    console.log("Joining all together for the full table")
+    const fullTable: string = logs.map((log: any) => {
+        const matchingTransaction = transactions.find((transaction: any) => transaction.transaction_hash === log.transactionHash);
+        const matchingBlock = blocks.find((block: any) => block.block_number === log.blockNumber);
+
+        return `${log.blockHash},${log.blockNumber.toString()},${matchingBlock?.block_time},${matchingBlock?.block_date},${log.address},${log.transactionHash},${matchingTransaction ? matchingTransaction.transaction_from : ''},${matchingTransaction ? matchingTransaction.transaction_to : ''},${log.transactionIndex.toString()},${log.logIndex.toString()},${log.topics[0] || ''},${log.topics.length > 1 ? log.topics[1] : ''},${log.topics.length > 2 ? log.topics[2] : ''},${log.topics.length > 3 ? log.topics[3] : ''},${log.data},${log.removed.toString()}`;
     }).join('\n');
 
-    // console.log(fullTable)
-
-
     // CSV header
-    const csvHeader = 'block_hash,block_number,block_time,block_date,contract_address,event_name,tx_hash,tx_from,tx_to,tx_index,log_index,topic0,topic1,topic2,topic3,data,removed\n';
+    const csvHeader: string = 'block_hash,block_number,block_time,block_date,contract_address,tx_hash,tx_from,tx_to,tx_index,log_index,topic0,topic1,topic2,topic3,data,removed\n';
 
-    // // Convert logs to CSV
-    // const csvRows = logs.map(log => {
-    //     const topics = log.topics as string[];
-
-    //     return [
-    //         log.blockHash,
-    //         log.blockNumber.toString(),
-    //         block_time,
-    //         block_date,
-    //         log.address,
-    //         log.eventName,
-    //         log.transactionHash,
-    //         transaction.from ?? '',
-    //         transaction.to ?? '',
-    //         log.transactionIndex.toString(),
-    //         log.logIndex.toString(),
-    //         topics[0] || '',
-    //         topics.length > 1 ? topics[1] : null,
-    //         topics.length > 2 ? topics[2] : null,
-    //         topics.length > 3 ? topics[3] : null,
-    //         log.data,
-    //         log.removed.toString()
-    //     ].join(',');
-    // }).join('\n');
-
-    const csv = csvHeader + fullTable;
+    const csv: string = csvHeader + fullTable;
     console.log(csv);
 
     // Approximate size in bytes (assuming UTF-16, 2 bytes per character)
-    const sizeInBytes = new TextEncoder().encode(csv).length;
-    const sizeInMegabytes = sizeInBytes / (1024 * 1024);
+    const sizeInBytes: number = new TextEncoder().encode(csv).length;
+    const sizeInMegabytes: number = sizeInBytes / (1024 * 1024);
 
     console.log(`CSV Size: ${sizeInMegabytes.toFixed(2)} MB`);
 
     // Upload CSV to Dune
-    const apiKey = process.env.DUNE_API_KEY; // Assuming the API key is stored in an environment variable
+    const dune_api_key = process.env.DUNE_API_KEY as string; // Assuming the API key is stored in an environment variable
     const headers: Record<string, string> = {
         'Content-Type': 'application/json'
     };
 
-    if (apiKey) {
-        headers['X-DUNE-API-KEY'] = apiKey;
+    if (dune_api_key) {
+        headers['X-DUNE-API-KEY'] = dune_api_key;
     }
 
     const options = {
@@ -142,16 +120,16 @@ async function main() {
         headers: headers,
         body: JSON.stringify({
             data: csv,
-            table_name: "jackie_test_byop_two_event_not_decoded",
+            table_name: "jackie_test_byop_base_all_events_raw",
             is_private: true
         })
     };
 
+    console.log("Uploading to Dune...")
     fetch('https://api.dune.com/api/v1/table/upload/csv', options)
         .then(response => response.json())
         .then(response => console.log(response))
         .catch(err => console.error(err));
-
 }
 
-main();
+main().catch(console.error);
