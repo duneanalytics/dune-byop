@@ -5,10 +5,10 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const alchemy_api_key = process.env.ALCHEMY_API_KEY as string; // Assuming the API key is stored in an environment variable
+const rpc_api_key = process.env.QUICK_NODE_BASE_API_KEY as string;
 export const publicClient = createPublicClient({
     chain: base,
-    transport: http(`https://base-mainnet.g.alchemy.com/v2/${alchemy_api_key}`)
+    transport: http(`https://quaint-rough-layer.base-mainnet.quiknode.pro/${rpc_api_key}`)
 });
 
 async function main() {
@@ -16,42 +16,32 @@ async function main() {
     // =============================================================================
     /**
      * This block gets all the logs or events for a particular contract
-     * TODO refactor out so contract address & block number the contract was deployed at can be parameters
+     * TODO refactor out so contract address & block number the contract was deployed at & CHUNK SIZE can be parameters
      */
     const currentBlockNumber = await publicClient.getBlockNumber();
-
-    let fromBlock: bigint = 3620407n;
-    let toBlock: bigint = currentBlockNumber;
-
+    let deployedBlock: bigint = 3620407n;
     const logs: any[] = [];
+    console.log(`Preparing to fetch logs for from ${deployedBlock} to ${currentBlockNumber}.`);
 
-    while (fromBlock <= currentBlockNumber) {
-        try {
-            const result = await publicClient.getLogs({
-                address: '0xd0b53D9277642d899DF5C87A3966A349A798F224',
-                fromBlock,
-                toBlock
-            });
+    const MAX_RANGE = 9999n; //QuickNode has 10k blocks limit
+    const ranges: { fromBlock: bigint, toBlock: bigint }[] = [];
+    for (let from = deployedBlock; from <= currentBlockNumber; from += MAX_RANGE + 1n) {
+        const toBlock = BigInt(Math.min(Number(from) + Number(MAX_RANGE), Number(currentBlockNumber)));
+        ranges.push({ fromBlock: from, toBlock });
+    }
 
-            logs.push(...result);
-            fromBlock = toBlock + 1n;
-            toBlock = currentBlockNumber;
-        } catch (error: any) {
-            if (error.details) {
-                const match = error.details.match(/\[0x([a-f0-9]+), 0x([a-f0-9]+)\]/);
-                if (match) {
-                    fromBlock = BigInt(`0x${match[1]}`);
-                    toBlock = BigInt(`0x${match[2]}`);
-                    console.log(`Fetching logs from block ${fromBlock} to ${toBlock}`);
-                } else {
-                    console.error("Error parsing block range from error message:", error);
-                    break;
-                }
-            } else {
-                console.error("Unexpected error:", error);
-                break;
-            }
-        }
+    const logPromises = ranges.map(range => publicClient.getLogs({
+        address: '0xd0b53D9277642d899DF5C87A3966A349A798F224',
+        fromBlock: range.fromBlock,
+        toBlock: range.toBlock
+    }));
+
+    try {
+        const results = await Promise.all(logPromises);
+        results.forEach(result => logs.push(...result));
+        console.log('All logs have been fetched.');
+    } catch (error: any) {
+        console.error("Error calling getLogs:\n", error);
     }
 
     // =============================================================================
@@ -84,43 +74,67 @@ async function main() {
 
     // const logs: Log[] = require('./saved_logs.json');
 
+    // =================================================================
+    /**
+     * Fetching block time from
+     */
+
+
+    // STOPPING POINT: switch to quicknode, so test that it still works, then potentially get the getBlockReceipt function for base
+    // but anyways test out the parallelization with that 
+
+    //     const blockNumberList = logs.map(log => log.blockNumber);
+    //     console.log(`Number of blocks to get info on: ${blockNumberList.length}`);
+
+    //     const CHUNK_SIZE = 80; // Number of blocks to process at a time, this is to avoid rate limiting
+    //     const blocks: { block_number: bigint, block_time: string, block_date: string }[] = [];
+    //     for (let i = 0; i < blockNumberList.length; i += CHUNK_SIZE) {
+    //         const blockNumberChunk = blockNumberList.slice(i, i + CHUNK_SIZE);
+    //         console.log(`Fetching blocks from ${blockNumberChunk[0]} to ${blockNumberChunk[blockNumberChunk.length - 1]}`);
+
+    //         // Collect an array of promises for this chunk
+    //         const blockPromises = blockNumberChunk.map(blockNumber => publicClient.getBlock({
+    //             blockNumber: BigInt(blockNumber), // TODO: remove BigInt casting after testing
+    //         }));
+
+    //         // Resolve all promises in this chunk
+    //         const results = await Promise.all(blockPromises);
+
+    //         // Process results
+    //         const blockDetails = results.map(block => {
+    //             const timestampInSeconds = Number(block.timestamp);
+    //             const block_time = new Date(timestampInSeconds * 1000).toISOString().replace('T', ' ').replace(/\.\d+Z/, '');
+    //             const block_date = block_time.substring(0, 10);
+
+    //             return {
+    //                 block_number: block.number,
+    //                 block_time: block_time,
+    //                 block_date: block_date
+    //             };
+    //         });
+
+    //         blocks.push(...blockDetails);
+    //     }
+
     // =============================================================================
+    /**
+     * Save all the blocks for future debugging so we don't need to run it over and over again
+     */
+    // const blockFilePath = 'test_blocks.json';
+    // const blocksJson = JSON.stringify(blocks.map(block => ({
+    //     block_number: block.block_number.toString(),
+    //     block_time: block.block_time,
+    //     block_date: block.block_date
+    // })), null, 2);
+    // fs.writeFileSync(blockFilePath, blocksJson);
+    // console.log(`Logs saved to ${blockFilePath}`);
 
-    const blockNumberList = logs.map(log => log.blockNumber);
-    console.log(`Number of blocks to get info on: ${blockNumberList.length}`);
-
-    // const CHUNK_SIZE = 200; // Number of blocks to process at a time
-    // const blocks: { block_number: bigint, block_time: string, block_date: string }[] = [];
-    // for (let i = 0; i < blockNumberList.length; i += CHUNK_SIZE) {
-    //     const blockNumberChunk = blockNumberList.slice(i, i + CHUNK_SIZE);
-    //     console.log(`Fetching blocks from ${blockNumberChunk[0]} to ${blockNumberChunk[blockNumberChunk.length - 1]}`);
-
-    //     // Collect an array of promises for this chunk
-    //     const blockPromises = blockNumberChunk.map(blockNumber => publicClient.getBlock({
-    //         blockNumber: blockNumber,
-    //     }));
-
-    //     // Resolve all promises in this chunk
-    //     const results = await Promise.all(blockPromises);
-
-    //     // Process results
-    //     const blockDetails = results.map(block => {
-    //         const timestampInSeconds = Number(block.timestamp);
-    //         const block_time = new Date(timestampInSeconds * 1000).toISOString().replace('T', ' ').replace(/\.\d+Z/, '');
-    //         const block_date = block_time.substring(0, 10);
-
-    //         return {
-    //             block_number: block.number,
-    //             block_time: block_time,
-    //             block_date: block_date
-    //         };
-    //     });
-
-    //     blocks.push(...blockDetails);
-    // }
-
-    const transactionHashList = logs.map(log => log.transactionHash);
-    console.log(`Number of transactions to get info on: ${transactionHashList}`);
+    // =================================================================
+    /**
+     * Fetching txn from and to
+     */
+    // const transactionHashList = logs.map(log => log.transactionHash);
+    // console.log(`Number of transactions to get info on: ${transactionHashList}`);
 
     // const transactions: { transaction_hash: string, transaction_from: string, transaction_to: string }[] = [];
     // for (let i = 0; i < transactionHashList.length; i++) {
