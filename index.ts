@@ -1,14 +1,16 @@
 import { createPublicClient, http } from 'viem';
 import { base } from 'viem/chains';
 const fs = require('fs');
+import config from './config';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
 const rpc_api_key = process.env.QUICK_NODE_BASE_API_KEY as string;
+const nodeProviderURL = config.nodeProviderURL + rpc_api_key;
 export const publicClient = createPublicClient({
     chain: base,
-    transport: http(`https://quaint-rough-layer.base-mainnet.quiknode.pro/${rpc_api_key}`)
+    transport: http(nodeProviderURL)
 });
 
 async function main() {
@@ -16,16 +18,25 @@ async function main() {
     // =============================================================================
     /**
      * This block gets all the logs or events for a particular contract
-     * TODO refactor out so contract address & block number the contract was deployed at & CHUNK SIZE can be parameters
      */
     const startTimeLogs: number = Date.now();
 
+    let { contractAddress, contractDeployedBlock, NODE_API_MAX_RANGE, blockChunkSize, txnChunkSize, localFileName, duneTableName } = config;
+    console.log('contractAddress:', contractAddress);
+    console.log('contractDeployedBlock:', contractDeployedBlock);
+    console.log('NODE_API_MAX_RANGE:', NODE_API_MAX_RANGE);
+    console.log('blockChunkSize:', blockChunkSize);
+    console.log('txnChunkSize:', txnChunkSize);
+    console.log('txnChunkSize:', localFileName);
+    console.log('txnChunkSize:', duneTableName);
+    console.log('================================================\n')
+
     const currentBlockNumber = await publicClient.getBlockNumber();
-    let deployedBlock: bigint = 3620407n; // TODO: parameterize
+    let deployedBlock: bigint = contractDeployedBlock;
     const logs: any[] = [];
     console.log(`Preparing to fetch logs for from ${deployedBlock} to ${currentBlockNumber}.`);
 
-    const MAX_RANGE = 9999n; //// TODO: parameterize || QuickNode has 10k blocks limit
+    const MAX_RANGE = NODE_API_MAX_RANGE;
     const ranges: { fromBlock: bigint, toBlock: bigint }[] = [];
     for (let from = deployedBlock; from <= currentBlockNumber; from += MAX_RANGE + 1n) {
         const toBlock = BigInt(Math.min(Number(from) + Number(MAX_RANGE), Number(currentBlockNumber)));
@@ -33,7 +44,7 @@ async function main() {
     }
 
     const logPromises = ranges.map(range => publicClient.getLogs({
-        address: '0xd0b53D9277642d899DF5C87A3966A349A798F224', // TODO: parameterize
+        address: (contractAddress.startsWith('0x') ? contractAddress : `0x${contractAddress}`) as `0x${string}` | `0x${string}`[] | undefined,
         fromBlock: range.fromBlock,
         toBlock: range.toBlock
     }));
@@ -47,7 +58,8 @@ async function main() {
     }
 
     const endTimeLogs: number = Date.now();
-    console.log(`GetLogs execution time: ${(endTimeLogs - startTimeLogs) / 1000} seconds`);
+    console.log(`GetLogs execution time: ${(endTimeLogs - startTimeLogs) / 1000} seconds\n`);
+    console.log('================================================\n\n')
     // =================================================================
     /**
      * Fetching block time from
@@ -56,10 +68,10 @@ async function main() {
     const startTimeBlocks: number = Date.now();
 
     const blockNumberList = logs.map(log => log.blockNumber);
-    console.log(`Number of blocks to get info on: ${blockNumberList.length}`);
+    console.log(`Number of blocks to get info on: ${blockNumberList.length} `);
     console.log('First 10 elements in blockNumberList:', blockNumberList.slice(0, 10));
 
-    const BLOCK_CHUNK_SIZE = 5000; // TODO: parameterize
+    const BLOCK_CHUNK_SIZE = blockChunkSize;
 
     const blocks: { block_number: bigint, block_time: string, block_date: string }[] = [];
     let leftBlocks: number[] = [...blockNumberList]; // Initially set to all blocks
@@ -69,7 +81,7 @@ async function main() {
 
         for (let i = 0; i < blockNumbers.length; i += BLOCK_CHUNK_SIZE) {
             const blockNumberChunk = blockNumbers.slice(i, i + BLOCK_CHUNK_SIZE);
-            console.log(`Fetching blocks from ${blockNumberChunk[0]} to ${blockNumberChunk[blockNumberChunk.length - 1]}`);
+            console.log(`Fetching blocks from ${blockNumberChunk[0]} to ${blockNumberChunk[blockNumberChunk.length - 1]} `);
 
             const blockPromises = blockNumberChunk.map(blockNumber => publicClient.getBlock({
                 blockNumber: BigInt(blockNumber),
@@ -78,11 +90,11 @@ async function main() {
                 if (error.body && error.body.params && error.body.params.length > 0) {
                     const failedBlockNumber = parseInt(error.body.params[0], 16);
                     newFailedBlocks.push(blockNumber);
-                    console.error(`Error fetching block ${failedBlockNumber}: ${error}`);
+                    console.error(`Error fetching block ${failedBlockNumber}: ${error} `);
                 } else {
                     // Handle the case where error.body or error.body.params is undefined
                     newFailedBlocks.push(blockNumber);
-                    console.error(`Unexpected error fetching block ${blockNumber}: ${error}`);
+                    console.error(`Unexpected error fetching block ${blockNumber}: ${error} `);
                 }
                 return null; // Return null for failed requests
             }));
@@ -108,7 +120,7 @@ async function main() {
 
     // Keep retrying until there are no more failed blocks
     while (leftBlocks.length > 0) {
-        console.log(`Trying/Retrying ${leftBlocks.length} left blocks.`);
+        console.log(`Trying / Retrying ${leftBlocks.length} left blocks.`);
         leftBlocks = await fetchBlocks(leftBlocks);
     }
 
@@ -118,7 +130,8 @@ async function main() {
 
 
     const endTimeBlocks: number = Date.now();
-    console.log(`GetBlocks execution time: ${(endTimeBlocks - startTimeBlocks) / 60000} minutes`);
+    console.log(`GetBlocks execution time: ${(endTimeBlocks - startTimeBlocks) / 60000} minutes\n`);
+    console.log('================================================\n\n')
 
     // =================================================================
     /**
@@ -127,10 +140,10 @@ async function main() {
     const startTimeTxns: number = Date.now();
 
     const transactionHashList = logs.map(log => log.transactionHash);
-    console.log(`Number of transactions to get info on: ${transactionHashList.length}`);
+    console.log(`Number of transactions to get info on: ${transactionHashList.length} `);
     console.log('First 10 elements in transactionHashList:', transactionHashList.slice(0, 10));
 
-    const TXN_CHUNK_SIZE = 5000; // TODO: parameterize
+    const TXN_CHUNK_SIZE = txnChunkSize;
 
     const transactions: { transaction_hash: string, transaction_from: string, transaction_to: string }[] = [];
     let leftTransactions: string[] = [...transactionHashList]; // Initially set to all transactions
@@ -140,13 +153,13 @@ async function main() {
 
         for (let i = 0; i < transactionHashes.length; i += TXN_CHUNK_SIZE) {
             const transactionHashChunk = transactionHashes.slice(i, i + TXN_CHUNK_SIZE);
-            console.log(`Fetching transactions for chunk starting from ${transactionHashChunk[0]}`);
+            console.log(`Fetching transactions for chunk starting from ${transactionHashChunk[0]} `);
 
             const transactionPromises = transactionHashChunk.map(hash => publicClient.getTransaction({
-                hash: (hash.startsWith('0x') ? hash : `0x${hash}`) as `0x${string}`,
+                hash: (hash.startsWith('0x') ? hash : `0x${hash} `) as `0x${string} `,
             }).catch(error => {
                 newFailedTransactions.push(hash);
-                console.error(`Error fetching transaction ${hash}: ${error}`);
+                console.error(`Error fetching transaction ${hash}: ${error} `);
                 return null; // Return null for failed requests
             }));
 
@@ -167,7 +180,7 @@ async function main() {
 
     // Keep retrying until there are no more failed transactions
     while (leftTransactions.length > 0) {
-        console.log(`Trying/Retrying ${leftTransactions.length} left transactions.`);
+        console.log(`Trying / Retrying ${leftTransactions.length} left transactions.`);
         leftTransactions = await fetchTransactions(leftTransactions);
     }
 
@@ -175,7 +188,8 @@ async function main() {
 
 
     const endTimeTxns: number = Date.now();
-    console.log(`GetTransactions execution time: ${(endTimeTxns - startTimeTxns) / 60000} minutes`);
+    console.log(`GetTransactions execution time: ${(endTimeTxns - startTimeTxns) / 60000} minutes\n\n`);
+
     // =================================================================
     /**
      * Joining all fetched info into one table
@@ -190,13 +204,13 @@ async function main() {
         const matchingTransaction = transactionIndex.get(log.transactionHash);
         const matchingBlock = blockIndex.get(log.blockNumber.toString());
 
-        return `${log.blockHash},${log.blockNumber.toString()},${matchingBlock?.block_time},${matchingBlock?.block_date},${log.address},${log.transactionHash},${matchingTransaction ? matchingTransaction.transaction_from : ''},${matchingTransaction ? matchingTransaction.transaction_to : ''},${log.transactionIndex.toString()},${log.logIndex.toString()},${log.topics[0] || ''},${log.topics.length > 1 ? log.topics[1] : ''},${log.topics.length > 2 ? log.topics[2] : ''},${log.topics.length > 3 ? log.topics[3] : ''},${log.data},${log.removed.toString()}`;
+        return `${log.blockHash},${log.blockNumber.toString()},${matchingBlock?.block_time},${matchingBlock?.block_date},${log.address},${log.transactionHash},${matchingTransaction ? matchingTransaction.transaction_from : ''},${matchingTransaction ? matchingTransaction.transaction_to : ''},${log.transactionIndex.toString()},${log.logIndex.toString()},${log.topics[0] || ''},${log.topics.length > 1 ? log.topics[1] : ''},${log.topics.length > 2 ? log.topics[2] : ''},${log.topics.length > 3 ? log.topics[3] : ''},${log.data},${log.removed.toString()} `;
     }).join('\n');
 
     const csvHeader: string = 'block_hash,block_number,block_time,block_date,contract_address,tx_hash,tx_from,tx_to,tx_index,log_index,topic0,topic1,topic2,topic3,data,removed\n';
 
     const csv: string = csvHeader + fullTable;
-    fs.writeFileSync('uniswapV3_ETH_USDC_10_logs.csv', csv);
+    fs.writeFileSync(localFileName, csv);
 
     const sizeInBytes: number = new TextEncoder().encode(csv).length;
     const sizeInMegabytes: number = sizeInBytes / (1024 * 1024);
@@ -220,7 +234,7 @@ async function main() {
         headers: headers,
         body: JSON.stringify({
             data: csv,
-            table_name: "jackie_test_byop_base_all_events_raw",
+            table_name: duneTableName,
             is_private: true
         })
     };
