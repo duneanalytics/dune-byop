@@ -1,4 +1,5 @@
 export interface Config {
+    chainSelected: string;
     contractAddress: string;
     contractDeployedBlock: bigint;
     nodeProviderURL: string;
@@ -7,30 +8,34 @@ export interface Config {
     txnChunkSize: number;
     localFileName: string;
     duneTableName: string;
+    duneTableNamespace: string;
 }
 
-// // UniswapV3 PoolFactory
-// const config: Config = {
-//     contractAddress: '0x33128a8fC17869897dcE68Ed026d694621f6FDfD', // UniswapV3 PoolFactory https://parsec.fi/address/0x33128a8fc17869897dce68ed026d694621f6fdfd
-//     nodeProviderURL: 'https://quaint-rough-layer.base-mainnet.quiknode.pro/',
-//     contractDeployedBlock: 1371680n,
-//     NODE_API_MAX_RANGE: 9999n, // QuickNode has 10k blocks limit
-//     blockChunkSize: 5000,
-//     txnChunkSize: 5000,
-//     localFileName: 'uniswapV3_Pool_Factory_logs.csv',
-//     duneTableName: 'jackie_byop_mvp_uniswapv3_pool_factory_base_all_events_raw'
-// };
-
-// UniswapV3 ETH/USDC 10
+// UniswapV3 PoolFactory
 const config: Config = {
-    contractAddress: '0xd0b53D9277642d899DF5C87A3966A349A798F224', // UniswapV3 ETH/USDC 10: https://parsec.fi/address/0xd0b53D9277642d899DF5C87A3966A349A798F224#events
+    chainSelected: 'base',
+    contractAddress: '0x33128a8fC17869897dcE68Ed026d694621f6FDfD', // UniswapV3 PoolFactory https://parsec.fi/address/0x33128a8fc17869897dce68ed026d694621f6fdfd
     nodeProviderURL: 'https://quaint-rough-layer.base-mainnet.quiknode.pro/',
-    contractDeployedBlock: 3620407n,
+    contractDeployedBlock: 1371680n,
     NODE_API_MAX_RANGE: 9999n, // QuickNode has 10k blocks limit
     blockChunkSize: 5000,
     txnChunkSize: 5000,
-    localFileName: 'uniswapV3_ETH_USDC_10_logs.csv',
-    duneTableName: 'jackie_byop_mvp_uniswapv3_ETHUSDC_10_base_all_events_raw'
+    localFileName: 'uniswapV3_Pool_Factory_logs.csv',
+    duneTableName: 'dataset_jackie_byop_mvp_uniswapv3_pool_factory_base_all_events_raw_updated', // must start with dataset_
+    duneTableNamespace:'dune'
 };
+
+// // UniswapV3 ETH/USDC 10
+// const config: Config = {
+//     chainSelected: 'base',
+//     contractAddress: '0xd0b53D9277642d899DF5C87A3966A349A798F224', // UniswapV3 ETH/USDC 10: https://parsec.fi/address/0xd0b53D9277642d899DF5C87A3966A349A798F224#events
+//     nodeProviderURL: 'https://quaint-rough-layer.base-mainnet.quiknode.pro/',
+//     contractDeployedBlock: 3620407n,
+//     NODE_API_MAX_RANGE: 9999n, // QuickNode has 10k blocks limit
+//     blockChunkSize: 5000,
+//     txnChunkSize: 5000,
+//     localFileName: 'uniswapV3_ETH_USDC_10_logs.csv',
+//     duneTableName: 'dateset_jackie_byop_mvp_uniswapv3_ETHUSDC_10_base_all_events_raw_updated', // must start with dataset_
+// };
 
 export default config;

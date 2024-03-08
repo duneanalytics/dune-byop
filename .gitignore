@@ -24,3 +24,5 @@ pnpm-debug.log
 
 # Ignore macOS specific files
 .DS_Store
+
+*.csv
