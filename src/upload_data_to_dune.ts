@@ -161,7 +161,10 @@ export async function uploadDataToDune(): Promise<void> {
         console.log(`Creating table dune.${duneTableNamespace}.${duneTableName} on Dune...`);
         try {
             await createTable(duneTableNamespace, duneTableName, dune_api_key);
-            
+
+            // Wait for createTable to finish before proceeding
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
             // Chunk insert the CSV to Dune, 200K lines per chunk
             const chunkSizeInLines = 200_000;
             const filePath = `./${localFileName}`;

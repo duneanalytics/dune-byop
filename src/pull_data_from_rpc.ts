@@ -209,21 +209,29 @@ export async function fetchDataFromRPC(): Promise<any> {
     const blockIndex = new Map(uniqueBlocks.map(block => [block.block_number.toString(), block]));
     const transactionIndex = new Map(transactions.map(transaction => [transaction.transaction_hash, transaction]));
 
-    const fullTable = logs.map(log => {
+    const csvHeader: string = 'block_hash,block_number,block_time,block_date,contract_address,tx_hash,tx_from,tx_to,tx_index,log_index,topic0,topic1,topic2,topic3,data\n';
+
+
+    // Create a write stream and write the CSV header
+    const writeStream = fs.createWriteStream(localFileName);
+    writeStream.write(csvHeader);
+
+    logs.forEach(log => {
         const matchingTransaction = transactionIndex.get(log.transactionHash);
         const matchingBlock = blockIndex.get(log.blockNumber.toString());
 
-        return `${log.blockHash},${log.blockNumber.toString()},${matchingBlock?.block_time},${matchingBlock?.block_date},${log.address},${log.transactionHash},${matchingTransaction ? matchingTransaction.transaction_from : ''},${matchingTransaction ? matchingTransaction.transaction_to : ''},${log.transactionIndex.toString()},${log.logIndex.toString()},${log.topics[0] || ''},${log.topics.length > 1 ? log.topics[1] : ''},${log.topics.length > 2 ? log.topics[2] : ''},${log.topics.length > 3 ? log.topics[3] : ''},${log.data}`;
-    }).join('\n');
+        const line = `${log.blockHash},${log.blockNumber.toString()},${matchingBlock?.block_time},${matchingBlock?.block_date},${log.address},${log.transactionHash},${matchingTransaction ? matchingTransaction.transaction_from : ''},${matchingTransaction ? matchingTransaction.transaction_to : ''},${log.transactionIndex.toString()},${log.logIndex.toString()},${log.topics[0] || ''},${log.topics.length > 1 ? log.topics[1] : ''},${log.topics.length > 2 ? log.topics[2] : ''},${log.topics.length > 3 ? log.topics[3] : ''},${log.data}\n`;
 
-    const csvHeader: string = 'block_hash,block_number,block_time,block_date,contract_address,tx_hash,tx_from,tx_to,tx_index,log_index,topic0,topic1,topic2,topic3,data\n';
+        writeStream.write(line);
+    });
 
-    const csv: string = csvHeader + fullTable;
-    fs.writeFileSync(localFileName, csv);
-    console.log(`CSV file has been written to ${path.join(process.cwd(), localFileName)}`);
+    writeStream.end();
 
-    const sizeInBytes: number = new TextEncoder().encode(csv).length;
-    const sizeInMegabytes: number = sizeInBytes / (1024 * 1024);
-    console.log(`CSV Size: ${sizeInMegabytes.toFixed(2)} MB`);
-    console.log('================================================\n\n')
+    writeStream.on('finish', () => {
+        const sizeInBytes: number = fs.statSync(localFileName).size;
+        const sizeInMegabytes: number = sizeInBytes / (1024 * 1024);
+        console.log(`CSV file has been written to ${path.join(process.cwd(), localFileName)}`);
+        console.log(`CSV Size: ${sizeInMegabytes.toFixed(2)} MB`);
+        console.log('================================================\n\n');
+    });
 }
