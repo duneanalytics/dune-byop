@@ -1,11 +1,10 @@
 {
-  "name": "viem-scripts",
+  "name": "dune-byop",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "ts-node index.ts"
+    "start": "ts-node main.ts"
   },
   "keywords": [],
   "author": "",
