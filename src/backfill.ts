@@ -4,6 +4,21 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 dotenv.config();
 
+//  Define custom types needed
+
+type Block = {
+    block_number: bigint;
+    block_time: string;
+    block_date: string;
+  };  
+
+type Transaction = {
+transaction_hash: string;
+transaction_from: string;
+transaction_to: string;
+};
+  
+
 export const publicClient = createPublicClient({
     transport: http(process.env.RPC_URL)
 });
@@ -143,14 +158,16 @@ async function getTransactionData(
 }
 
 export async function fetchDataFromRPC(
-    dunetableName: string,
+    duneTableName: string,
     contractAddress: string,
-    blockStart: bigint = 0n,
+    contractDeployedBlock: bigint, // @TODO: write a query on the fly to look up contract deployed block
     blockEnd: bigint = 0n,
     blockChunkSize: number = 5000,
     txnChunkSize: number = 5000,
-    nodeMaxRange = 9999n, //providers will set different max block ranges you can query logs on at once
+    nodeMaxRange = 9999n, // Providers will set different max block ranges you can query logs on at once
 ): Promise<any> {
+
+    const blockStart = contractDeployedBlock
     if (blockEnd === 0n) {
         blockEnd = await publicClient.getBlockNumber();
     }
@@ -182,12 +199,11 @@ export async function fetchDataFromRPC(
 
     console.log(`Fetched ${logs.length} logs from ${blockStart} to ${blockEnd}\n\n`)
 
-    //grab block timestamps and tx from and to data and then add to table
-    const uniqueBlocks = await getTimestamps(logs, blockChunkSize);
-    const transactions = await getTransactionData(logs, txnChunkSize);
-    const blockIndex = new Map(uniqueBlocks.map((block: { block_number: { toString: () => any; }; }) => [block.block_number.toString(), block]));
-    const transactionIndex = new Map(transactions.map((transaction: { transaction_hash: any; }) => [transaction.transaction_hash, transaction]));
-
+    // Grab block timestamps and tx from and to data and then add to table
+    const uniqueBlocks : Block[] = await getTimestamps(logs, blockChunkSize);
+    const transactions: Transaction[] = await getTransactionData(logs, txnChunkSize);
+    const blockIndex = new Map(uniqueBlocks.map((block: Block) => [block.block_number.toString(), block]));
+    const transactionIndex = new Map(transactions.map((transaction: Transaction) => [transaction.transaction_hash, transaction]));
 
     // Create a write stream and write the CSV header
     const csvHeader: string = 'block_hash,block_number,block_time,block_date,contract_address,tx_hash,tx_from,tx_to,tx_index,log_index,topic0,topic1,topic2,topic3,data\n';
