@@ -4,13 +4,15 @@
   "description": "",
   "main": "main.js",
   "scripts": {
-    "start": "ts-node main.ts"
+    "backfill": "ts-node scripts/run_backfill.ts",
+    "upload": "ts-node scripts/run_upload.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "dotenv": "^16.4.1",
+    "js-yaml": "^4.1.0",
     "viem": "^2.5.0"
   },
   "devDependencies": {

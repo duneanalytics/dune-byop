@@ -160,7 +160,7 @@ async function getTransactionData(
 export async function fetchDataFromRPC(
     duneTableName: string,
     contractAddress: string,
-    contractDeployedBlock: bigint, // @TODO: write a query on the fly to look up contract deployed block
+    contractDeployedBlock: bigint,
     blockEnd: bigint = 0n,
     blockChunkSize: number = 5000,
     txnChunkSize: number = 5000,

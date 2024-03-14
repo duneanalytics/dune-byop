@@ -1,11 +1,10 @@
 const fs = require('fs');
 import * as dotenv from 'dotenv';
-import * as readline from 'readline'; 
 
 dotenv.config();
 const dune_api_key = process.env.DUNE_API_KEY as string;
 
-function createLogsTable(duneTableNamespace: string, duneTableName: string, apiKey: string): void {
+async function createLogsTable(duneTableNamespace: string, duneTableName: string, apiKey: string){
     /*
     This function creates a table with the basic Ethereum logs structure and also transaction from and to fields.
     */
@@ -46,22 +45,24 @@ function createLogsTable(duneTableNamespace: string, duneTableName: string, apiK
         body: JSON.stringify(body)
     };
 
-    fetch(url, options)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log("Table created:", data);
-        })
-        .catch(error => {
-            console.error("Error creating table:", error);
-        });
+    try {
+        const response = await fetch(url, options);
+        const json = await response.json();
+        
+        if (!response.ok) {
+            console.error("Error creating table:", json);
+            throw new Error(`Failed to create table: ${json.message || 'Unknown error'}`);
+        } else {
+            console.log(`Table created: dune.${duneTableNamespace}.${duneTableName}`);
+        }
+    } catch (error) {
+        console.error("Error creating table:", error);
+        throw error; // Rethrow the error to be caught by the caller
+    }
+    
 }
 
-function uploadChunkToDune(chunk: string, apiKey: string, duneTableNamespace: string, duneTableName: string): void {
+async function uploadChunkToDune(chunk: string, apiKey: string, duneTableNamespace: string, duneTableName: string) {
     /*
     This function uploads a chunk of a CSV file to Dune as a table.
     @TODO: upload only from specific block number? read from dune to get latest block number and start from there?
@@ -81,27 +82,20 @@ function uploadChunkToDune(chunk: string, apiKey: string, duneTableNamespace: st
     };
 
     try {
-        fetch(url, options)
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(errorData => {
-                        console.error("Error uploading CSV to Dune (inner):", errorData);
-                    });
-                } else {
-                    return response.json().then(responseData => {
-                        console.log("Upload successful:", responseData);
-                    });
-                }
-            })
-            .catch(error => {
-                console.error("Error uploading CSV to Dune (outer):", error);
-            });
+        const response = await fetch(url, options)
+        const json = await response.json()
+            
+        if (!response.ok) {
+            console.error("Error uploading CSV to Dune:", json);
+        } else {
+            console.log("Upload successful:", json);
+        }
     } catch (error) {
-        console.error("Error uploading CSV to Dune (outer):", error);
+        console.error("Error uploading CSV to Dune:", error);
     }
 }
 
-function splitCSVIntoChunks(filePath: string, chunkSizeInLines: number, apiKey: string, duneTableNamespace: string, duneTableName: string): void {
+async function splitCSVIntoChunks(filePath: string, chunkSizeInLines: number, apiKey: string, duneTableNamespace: string, duneTableName: string) {
     /*
     This function reads a CSV file and splits it into chunks of a specified size and then uploads each chunk to Dune as a table.
     */
@@ -118,7 +112,7 @@ function splitCSVIntoChunks(filePath: string, chunkSizeInLines: number, apiKey: 
     let chunkCounter = 1;
     let header: string | null = null;
 
-    lineReader.on('line', (line: string) => {
+    for await (const line of lineReader) {
         if (isFirstChunk) {
             header = line;
             isFirstChunk = false;
@@ -136,47 +130,42 @@ function splitCSVIntoChunks(filePath: string, chunkSizeInLines: number, apiKey: 
             chunkCounter++;
 
             // Upload current chunk to Dune
-            uploadChunkToDune(currentChunk.join('\n'), apiKey, duneTableNamespace, duneTableName);
+            await uploadChunkToDune(currentChunk.join('\n'), apiKey, duneTableNamespace, duneTableName);
             
             currentChunk = []; // Reset chunk
         }
-    });
+    }
 
-    lineReader.on('close', () => {
-        // Save the last chunk to a CSV file
-        const chunkFilename = `test_${chunkCounter}.csv`;
-        if (header) {
-            // Add header as the first line of the chunk
-            currentChunk.unshift(header);
-        }
-        fs.writeFileSync(chunkFilename, currentChunk.join('\n'));
-        
-        // Upload the last chunk to Dune
-        uploadChunkToDune(currentChunk.join('\n'), apiKey, duneTableNamespace, duneTableName);
-    });
+    // Save the last chunk to a CSV file
+    const chunkFilename = `test_${chunkCounter}.csv`;
+    if (header) {
+        // Add header as the first line of the chunk
+        currentChunk.unshift(header);
+    }
+    fs.writeFileSync(chunkFilename, currentChunk.join('\n'));
+    
+    // Upload the last chunk to Dune
+    await uploadChunkToDune(currentChunk.join('\n'), apiKey, duneTableNamespace, duneTableName);
+
+
 }
 
 export async function uploadDataToDune(
     duneTableNamespace: string,
     duneTableName: string
 ): Promise<void> {
-    (async () => {
-        console.log(`Creating table dune.${duneTableNamespace}.${duneTableName} on Dune...`);
-        try {
-            // Call the function to create the table
-            await createLogsTable(duneTableNamespace, duneTableName, dune_api_key);
+    console.log(`Creating table dune.${duneTableNamespace}.${duneTableName} on Dune...`);
+    try {
+        // Call the function to create the table
+        await createLogsTable(duneTableNamespace, duneTableName, dune_api_key);
 
-            // Wait for createLogsTable to finish before proceeding
-            await new Promise(resolve => setTimeout(resolve, 2000));
+        // Chunk insert the CSV to Dune, 200K lines per chunk
+        const chunkSizeInLines = 200_000;
+        const filePath = `./${duneTableName}.csv`;
+        console.log('Reading from saved file:', filePath);
+        await splitCSVIntoChunks(filePath, chunkSizeInLines, dune_api_key, duneTableNamespace, duneTableName);
 
-            // Chunk insert the CSV to Dune, 200K lines per chunk
-            const chunkSizeInLines = 200_000;
-            const filePath = `./${duneTableName}.csv`;
-            console.log('Reading from saved file:', filePath);
-            splitCSVIntoChunks(filePath, chunkSizeInLines, dune_api_key, duneTableNamespace, duneTableName);
-
-        } catch (error) {
-            console.error("Error creating table:", error);
-        }
-    })();
+    } catch (error) {
+        console.error("Error creating table:", error);
+    }
 }
