@@ -1,4 +1,4 @@
-# BYOP (Bring Your Own Protocol) Script
+# Dune BYOP (Bring Your Own Protocol)
 
 Leverage this TypeScript-based tool, powered by [Viem](https://viem.sh/docs/getting-started), to seamlessly upload protocol data onto Dune for comprehensive analysis. Designed for protocols on chains not indexed by Dune, this script facilitates easy data extraction from RPC providers and upload to Dune, allowing for enriched data analysis by combining your protocol's data with existing on-chain information.
 
