@@ -28,6 +28,11 @@ Specify protocol specifics of the contract you'd like to BYOP for in the `config
 - **duneTableNamespace**: Indicate the namespace under which the table will be organized in Dune. This is the user or team account handle you created the API with.
 - **contractDeployedBlock**: Enter the deployment block of your contract. If unknown, Dune's AI can assist in finding this information. E.g. [Go to Dune AI](https://dune.com/ai) and ask "What is the block for which contract 0xd0b53D9277642d899DF5C87A3966A349A798F224 is deployed on the base chain?"
 
+### Install project dependencies
+
+- Install pnpm `npm install -g pnpm` if you don't have pnpm yet.
+- Install the dependencies by running `pnpm install`.
+
 ## How to Use
 
 This repository consists of two primary scripts that helps to bring your protocol data to Dune.
