@@ -70,11 +70,4 @@ For a practical demonstration of the uploaded data's potential, visit the [BYOP 
 ---
 
 ### For Contributors
-
-I've set up four types of issues right now:
-
-- `bugs`: if you spot a bug in the scripts.
-- `improvement` : if you want to make an improvement for the scripts.
-- `generic questions`: This is a catch all for other questions or suggestions you may have about the BYOP repo.
-
-If you want to contribute, either start an issue or go directly into making a PR (using the same labels as above).
+Please raise an issue to discuss or raise a PR directly.
